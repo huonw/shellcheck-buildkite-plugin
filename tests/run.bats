@@ -85,6 +85,30 @@ load '/usr/local/lib/bats/load.bash'
   unstub docker
 }
 
+@test "Shellcheck artifact uploading" {
+  export BUILDKITE_PLUGIN_SHELLCHECK_FILES_0="tests/testdata/test.sh"
+  export BUILDKITE_PLUGIN_SHELLCHECK_ARTIFACT="path/to/artifact.log"
+
+  stub mkdir \
+    "-p path/to/artifact.log : echo making directory"
+  stub tee \
+    "path/to/artifact.log : echo running tee"
+  stub buildkite \
+    "artifact upload path/to/artifact.log : echo running buildkite upload"
+
+  run "$PWD/hooks/command"
+  assert_success
+  assert_output --partial <<EOF
+making directory
+running tee
+running buildkite upload
+EOF
+
+  unstub mkdir
+  unstub tee
+  unstub buildkite
+}
+
 @test "Shellcheck failure" {
   export BUILDKITE_PLUGIN_SHELLCHECK_FILES_0="tests/testdata/subdir/llamas.sh"
 

@@ -1,6 +1,13 @@
 #!/bin/bash
 set -eu -o pipefail
 
+# Shorthand for reading env config
+function plugin_read_config() {
+    local var="BUILDKITE_PLUGIN_SHELLCHECK_${1}"
+    local default="${2:-}"
+    echo "${!var:-$default}"
+}
+
 # Reads either a value or a list from plugin config
 function plugin_read_list() {
   local prefix="BUILDKITE_PLUGIN_SHELLCHECK_$1"
@@ -39,9 +46,26 @@ while IFS=$'\n' read -r option ; do
   options+=("$option")
 done < <(plugin_read_list OPTIONS)
 
+# Read in the requested artifact path, if the user wants it uploaded
+# (e.g. to be used to create annotations summarizing the results)
+artifact=$(plugin_read_config ARTIFACT)
+if [ -n "$artifact" ]; then
+    mkdir -p "$(dirname $artifact)"
+    tee_args=("$artifact")
+else
+    tee_args=()
+fi
+
 echo "+++ Running shellcheck on ${#files[@]} files"
 if docker run --rm -v "$PWD:/mnt" --workdir "/mnt" koalaman/shellcheck "${options[@]+${options[@]}}" "${files[@]}" ; then
   echo "Files are ok ✅"
+  exit_code=0
 else
-  exit 1
+  exit_code=1
+fi | tee "${tee_args[@]}"
+
+if [ -n "$artifact" ]; then
+    buildkite artifact upload "$artifact"
 fi
+
+exit $exit_code
